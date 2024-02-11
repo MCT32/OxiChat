@@ -6,3 +6,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+irc = {path = "../irc"}
+tokio = { version = "1.36", features = ["full"] }
