@@ -57,7 +57,7 @@ async fn create_config() -> IrcConfig {
 }
 
 fn print_messages(msg: Message) {
-    let prefix = msg.prefix.unwrap_or_else(|| String::new()); // Use an empty string if prefix is None
+    let prefix = msg.prefix.unwrap_or_else(|| String::new()); 
     let command = msg.command;
     let params = msg.params.0.join(" ");
 
