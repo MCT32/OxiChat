@@ -8,7 +8,7 @@ use irc::{
 use tokio::{
     self,
     net::lookup_host,
-    time::{sleep, sleep_until, Sleep},
+    time::sleep,
 };
 
 #[tokio::main]
@@ -16,7 +16,7 @@ async fn main() {
     let (usr_nick, usr_name, host_name, server_name, real_name, address, port, channel) =
         create_user();
 
-    connection = init_irc(
+    let mut connection = init_irc(
         usr_nick,
         usr_name,
         host_name,
@@ -24,9 +24,9 @@ async fn main() {
         real_name,
         address,
         port,
-    );
+    ).await;
 
-    irc_clien(connection);
+    irc_client(&mut connection, channel).await;
 }
 
 pub fn create_user() -> (String, String, String, String, String, String, i32, String) {
@@ -45,7 +45,7 @@ pub fn create_user() -> (String, String, String, String, String, String, i32, St
     print!("\x1B[2J\x1B[1;1H");
     println!("Enter your hostname:");
     let mut host_name = String::new();
-    std::io::stdin().read_line(&mut host_name);
+    std::io::stdin().read_line(&mut host_name).unwrap();
     let host_name = host_name.trim().to_string();
 
     print!("\x1B[2J\x1B[1;1H");
@@ -123,15 +123,26 @@ async fn init_irc(
     connection
 }
 
-async fn irc_client(channel: String) {
+async fn irc_client(connection: &mut IrcConnection, channel: String) {
+    sleep(Duration::from_secs(10)).await;
+    connection
+        .send(Message {
+            prefix: None,
+            command: "JOIN".to_string(),
+            params: Params(vec![
+                format!("#{}", channel).to_string(),
+            ]),
+        })
+        .await
+        .unwrap();
     sleep(Duration::from_secs(3)).await;
     connection
         .send(Message {
             prefix: None,
             command: "PRIVMSG".to_string(),
             params: Params(vec![
-                format!("#{} :", channel).to_string(),
-                "another testing message".to_string(),
+                format!("#{}", channel).to_string(),
+                ":another testing message".to_string(),
             ]),
         })
         .await
