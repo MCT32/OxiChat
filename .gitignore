@@ -20,4 +20,4 @@ Cargo.lock
 
 # vscode
 .vscode/
-/client/src/NerdRoom.code-workspace
+irc/src/NerdRoom.code-workspace
