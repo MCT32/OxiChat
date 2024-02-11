@@ -1,9 +1,7 @@
-use std::time::Duration;
+use std::{io, time::Duration};
 
 use irc::{
-    self,
-    messages::{Message, Params},
-    IrcConfig, IrcConnection,
+    self, config::IrcConfig, messages::{Message, Params}, users::{User, UserFlags}, IrcConnection
 };
 use tokio::{
     self,
@@ -13,7 +11,7 @@ use tokio::{
 
 #[tokio::main]
 async fn main() {
-    let config = create_config();
+    let config = create_config().await;
 
     print!("\x1B[2J\x1B[1;1H");
     println!("Enter channel name:");
@@ -21,81 +19,61 @@ async fn main() {
     std::io::stdin().read_line(&mut channel).unwrap();
     let channel = channel.trim().to_string();
 
-    let mut connection = config.await.connect().await.unwrap();
+    let mut connection = config.connect().await.unwrap();
 
-    irc_client(&mut connection, channel).await;
+    irc_client(&mut connection, channel.clone()).await;
+
+    send_message(&mut connection, channel).await;
 
 }
 
-pub async fn create_config() -> IrcConfig {
-    print!("\x1B[2J\x1B[1;1H");
-    println!("Enter your desired NICK name:");
-    let mut nickname = String::new();
-    std::io::stdin().read_line(&mut nickname).unwrap();
-    let nickname = nickname.trim().to_string();
+async fn create_config() -> IrcConfig {
+    let nickname = get_input("Enter your desired NICK name:"); /* 
+    let username = get_input("Enter your desired username:");
+    let hostname = get_input("Enter your hostname:");
+    let servername = get_input("Enter your desired server name:");
+    let realname = get_input("Enter your real name:"); */
 
-    print!("\x1B[2J\x1B[1;1H");
-    println!("Enter your desired username:");
-    let mut username = String::new();
-    std::io::stdin().read_line(&mut username).unwrap();
-    let username = username.trim().to_string();
+    let username = nickname.clone();
+    let hostname = nickname.clone();
+    let servername = nickname.clone();
+    let realname = nickname.clone(); // TODO: all of this will come back after the tui...exists. 
 
-    print!("\x1B[2J\x1B[1;1H");
-    println!("Enter your hostname:");
-    let mut hostname = String::new();
-    std::io::stdin().read_line(&mut hostname).unwrap();
-    let hostname = hostname.trim().to_string();
+    let address = get_input("Enter the server address:");
+    let port: u16 = get_input("Enter port:").parse().expect("Invalid port");
 
-    print!("\x1B[2J\x1B[1;1H");
-    println!("Enter your desired server name:");
-    let mut servername = String::new();
-    std::io::stdin().read_line(&mut servername).unwrap();
-    let servername = servername.trim().to_string();
-
-    print!("\x1B[2J\x1B[1;1H");
-    println!("Enter your real name:");
-    let mut realname = String::new();
-    std::io::stdin().read_line(&mut realname).unwrap();
-    let realname = realname.trim().to_string();
-
-    print!("\x1B[2J\x1B[1;1H");
-    println!("Enter the server address");
-    let mut address = String::new();
-    std::io::stdin().read_line(&mut address).unwrap();
-    let address = address.trim().to_string();
-
-    print!("\x1B[2J\x1B[1;1H");
-    println!("Enter port:");
-    let mut port = String::new();
-    std::io::stdin().read_line(&mut port).unwrap();
-    let port: i32 = port.trim().parse().unwrap();
-
-    print!("\x1B[2J\x1B[1;1H");
-    println!("Enter channel name:");
-    let mut channel = String::new();
-    std::io::stdin().read_line(&mut channel).unwrap();
-    let channel = channel.trim().to_string();
-
-    IrcConfig{
-        host: lookup_host(format!("{}:{}", address, port)).await.unwrap().next().unwrap(),
-        nickname,
-        username,
-        hostname,
-        servername,
-        realname,
-        
-        password: None,
-        raw_receive_handler: None,
-        receive_handler: Some(|msg| {
-            println!("{}", msg);
+    IrcConfig::builder()
+        .user(User{
+            nickname,
+            username,
+            hostname,
+            servername,
+            realname,
+            flags: UserFlags::default(),
         })
+        //.password
+        .set_receive_handler(print_messages)
+        .host(lookup_host(format!("{}:{}", address, port)).await.unwrap().next().unwrap()).unwrap()
+}
 
-    }
+fn print_messages(msg: Message) {
+    let prefix = msg.prefix.unwrap_or_else(|| String::new()); // Use an empty string if prefix is None
+    let command = msg.command;
+    let params = msg.params.0.join(" ");
 
+    println!("{:?}: {} {}", prefix, command, params);
+}
+
+fn get_input(prompt: &str) -> String {
+    print!("\x1B[2J\x1B[1;1H");
+    println!("{}", prompt);
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).expect("Failed to read input");
+    input.trim().to_string()
 }
 
 async fn irc_client(connection: &mut IrcConnection, channel: String) {
-    sleep(Duration::from_secs(10)).await;
+    sleep(Duration::from_secs(5)).await;
     connection
         .send(Message {
             prefix: None,
@@ -106,25 +84,32 @@ async fn irc_client(connection: &mut IrcConnection, channel: String) {
         })
         .await
         .unwrap();
-    sleep(Duration::from_secs(3)).await;
+    sleep(Duration::from_secs(2)).await;
     
 }
 
-async fn send_message(connection: &mut IrcConnection) {
-    println!("start your messages with 'msg' and your commands with 'cmd'");
+async fn send_message(connection: &mut IrcConnection, channel: String) {
+    println!("you're in the chat. | go ham. ");
     loop {
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).unwrap();
         let input = input.trim();
 
         if !input.is_empty() {
-            //connection.send_raw(message).await.unwrap();
-            if input.starts_with("msg") {
-                connection
-                    .send_raw(format!("PRIVMSG #test :{}", input))
-                    .await
-                    .unwrap();
-            }
+            connection
+                .send(Message {
+                prefix: None,
+                command: "PRIVMSG".to_string(),
+                params: Params(vec![
+                    format!("#{}", channel).to_string(),
+                    format!(":{}", input.to_string())
+                ]),
+            })
+        .await
+        .unwrap();
+            if input == "QUIT" {
+                connection.quit().await.unwrap();
+            } 
         }
     }
 }
