@@ -2,8 +2,11 @@ mod config;
 mod utils;
 
 use std::{io::{self, Write}, sync::RwLock};
+use std::sync::Mutex;
 use crossterm::{execute, terminal, cursor, style::{Print, ResetColor, SetForegroundColor, Color}};
 use irc::messages::Message;
+use std::sync::{Arc};
+use tokio::sync::Mutex as TokioMutex;
 
 const TEXT: &str = include_str!("./ascii.txt");
 
@@ -17,7 +20,6 @@ pub static STATE: RwLock<State> = RwLock::new(State{
 
 #[tokio::main]
 async fn main() {
-
     let config = config::create_config().await;
 
     print_ascii_art();
@@ -29,9 +31,13 @@ async fn main() {
 
     let mut connection = config.connect().await.unwrap();
 
+    let state_arc = Arc::new(Mutex::new(State {
+        messages: Vec::new(),
+    })); // thanks chatgpt. i dont know what this does but it doesnt throw errors anymore
+
     utils::irc_client(&mut connection, channel.clone()).await;
 
-    utils::send_message(&mut connection, channel).await;
+    utils::send_message(Arc::new(TokioMutex::new(connection)), channel, state_arc).await;
 }
 
 fn print_ascii_art() {

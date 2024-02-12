@@ -4,6 +4,13 @@ use std::time::Duration;
 use irc::{IrcConnection, messages::{Message, Command}};
 use tokio::time::sleep;
 use crossterm::{execute, terminal, cursor, style::{Print, ResetColor, SetForegroundColor, Color}};
+use std::sync::{Arc, Mutex};
+use tokio::sync::Mutex as TokioMutex;
+
+use crate::State;
+
+
+// dont forget you edited line 33 of lib.rs
 
 use crate::STATE;
 
@@ -19,28 +26,67 @@ pub fn on_message_received(message: Message) {
 
 }
 
-pub fn print_messages(messages: &Vec<Message>) {    
+pub fn print_messages(messages: &Vec<Message>) {
     print_ascii_art();
-    for message in messages {
 
+    for message in messages {
         let prefix = match message.prefix.as_ref() {
             Some(message) => message,
-            None => ""  
+            None => ""
         };
 
         match &message.command {
+
+          /*Command::Pass() => {
+
+            }
+
+            Command::User() => {
+
+            }
+
+
+*/
             Command::Notice(receiver, msg) => {
-                println!("Notice from {}: {}", receiver, msg);
+                execute!(
+                    io::stdout(),
+                    SetForegroundColor(Color::Yellow),
+                    Print(format!("Notice from {}: {}", receiver, msg)),
+                    ResetColor,
+                    Print("\n")
+                ).unwrap();
             }
             Command::Join(channel) => {
-                println!("{} joined channel {}", prefix, channel);
+                execute!(
+                    io::stdout(),
+                    SetForegroundColor(Color::Green),
+                    Print(format!("{} joined channel {}", prefix, channel)),
+                    ResetColor,
+                    Print("\n")
+                ).unwrap();
+            }
+            Command::Nick(nickname) => {
+                execute!(
+                    io::stdout(),
+                    SetForegroundColor(Color::Blue),
+                    Print(format!("{} is your nickname.", &nickname)),
+                    ResetColor,
+                    Print("\n"),
+                ).unwrap();
+
             }
             command => {
                 if let Command::Raw(command, params) = command.raw() {
-                    println!("{} {} {}", prefix, command, params.join(" "));
+                    execute!(
+                        io::stdout(),
+                        SetForegroundColor(Color::Cyan),
+                        Print(format!("{} {} {}", prefix, command, params.join(" "))),
+                        ResetColor,
+                        Print("\n")
+                    ).unwrap();
                 }
             }
-    }
+        }
     }
 }
 
@@ -65,28 +111,31 @@ pub async fn irc_client(connection: &mut IrcConnection, channel: String) {
     sleep(Duration::from_secs(2)).await;
 }
 
-pub async fn send_message(connection: &mut IrcConnection, channel: String) {
-    print_ascii_art();
+pub async fn send_message(connection: Arc<TokioMutex<IrcConnection>>, channel: String, state: Arc<Mutex<State>>) { // this is fucking fuckity fucked up but it works
+    print_ascii_art(); 
     loop {
         let mut input = String::new();
         io::stdin().read_line(&mut input).unwrap();
-        let input = input.trim();
+        let input = input.trim().to_string();
 
         if !input.is_empty() {
-            connection
-                .send(Message {
+            let mut conn = connection.lock().await;
+            conn.send(Message {
                 prefix: None,
-                command: Command::PrivMsg( 
-                    format!("#{}", channel).to_string(),
-                    format!(":{}", input.to_string())
-                ),
-            })
-        .await
-        .unwrap();
+                command: Command::PrivMsg(format!("#{}", channel), input.clone()),
+            }).await.unwrap();
+
             if input == "QUIT" {
-                connection.quit().await.unwrap();
+                conn.quit().await.unwrap();
                 break;
             }
+
+            let mut state = state.lock().unwrap();
+            state.messages.push(Message {
+                prefix: Some("You".to_string()),
+                command: Command::PrivMsg(format!("#{}", channel), input),
+            });
+            print_messages(&state.messages);
         }
     }
 }
