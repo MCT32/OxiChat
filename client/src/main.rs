@@ -1,7 +1,7 @@
 mod config;
 mod utils;
 
-use std::{io::{self, Write}, sync::{OnceLock, RwLock}};
+use std::{io::{self, Write}, sync::RwLock};
 use crossterm::{execute, terminal, cursor, style::{Print, ResetColor, SetForegroundColor, Color}};
 use irc::messages::Message;
 

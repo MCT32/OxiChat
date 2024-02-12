@@ -1,12 +1,11 @@
-use std::{io, sync::mpsc::Receiver};
+use std::io;
 use std::io::Write;
-use std::sync::{Once, OnceLock};
 use std::time::Duration;
 use irc::{IrcConnection, messages::{Message, Command}};
 use tokio::time::sleep;
 use crossterm::{execute, terminal, cursor, style::{Print, ResetColor, SetForegroundColor, Color}};
 
-use crate::{State, STATE};
+use crate::STATE;
 
 const TEXT: &str = include_str!("./ascii.txt");
 
@@ -22,7 +21,6 @@ pub fn on_message_received(message: Message) {
 
 pub fn print_messages(messages: &Vec<Message>) {    
     print_ascii_art();
- 
     for message in messages {
 
         let prefix = match message.prefix.as_ref() {

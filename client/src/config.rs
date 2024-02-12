@@ -1,7 +1,6 @@
-use irc::{config::IrcConfig, users::{User, UserFlags}, IrcConnection};
+use irc::{config::IrcConfig, users::{User, UserFlags}};
 use tokio::net::lookup_host;
 use crate::utils::{get_input, on_message_received, print_ascii_art};
-use crate::utils::print_messages;
 
 pub async fn create_config() -> IrcConfig {
     print_ascii_art();
