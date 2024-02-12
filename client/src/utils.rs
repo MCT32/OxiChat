@@ -1,8 +1,9 @@
 use std::{io, sync::mpsc::Receiver};
-
+use std::io::Write;
 use std::time::Duration;
 use irc::{IrcConnection, messages::{Message, Command}};
 use tokio::time::sleep;
+use crossterm::{execute, terminal, cursor, style::{Print, ResetColor, SetForegroundColor, Color}};
 
 const TEXT: &str = include_str!("./ascii.txt");
 
@@ -27,7 +28,7 @@ pub fn print_messages(msg: Message) {
 
 pub fn get_input(prompt: &str) -> String {
     print!("\x1B[2J\x1B[1;1H");
-    println!("{}", TEXT);
+    print_ascii_art();
     println!("{}", prompt);
     let mut input = String::new();
     io::stdin().read_line(&mut input).expect("Failed to read input");
@@ -44,14 +45,13 @@ pub async fn irc_client(connection: &mut IrcConnection, channel: String) {
         .await
         .unwrap();
     sleep(Duration::from_secs(2)).await;
-
 }
 
 pub async fn send_message(connection: &mut IrcConnection, channel: String) {
-    println!("{}", TEXT);
+    print_ascii_art();
     loop {
         let mut input = String::new();
-        std::io::stdin().read_line(&mut input).unwrap();
+        io::stdin().read_line(&mut input).unwrap();
         let input = input.trim();
 
         if !input.is_empty() {
@@ -71,4 +71,17 @@ pub async fn send_message(connection: &mut IrcConnection, channel: String) {
             }
         }
     }
+}
+
+pub fn print_ascii_art() {
+    execute!(io::stdout(), terminal::Clear(terminal::ClearType::All)).unwrap();
+    execute!(io::stdout(), cursor::MoveTo(0, 0)).unwrap();
+    let mut stdout = io::stdout();
+    execute!(
+        stdout,
+        SetForegroundColor(Color::Yellow),
+        Print(format!("{} \n", TEXT)),
+        ResetColor,
+    ).unwrap();
+    stdout.flush().unwrap();
 }

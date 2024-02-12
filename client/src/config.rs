@@ -1,9 +1,11 @@
 use irc::{config::IrcConfig, users::{User, UserFlags}, IrcConnection};
 use tokio::net::lookup_host;
-
-use crate::utils::{get_input, print_messages};
+use crate::utils::{get_input, print_ascii_art};
+use crate::utils::print_messages;
 
 pub async fn create_config() -> IrcConfig {
+    print_ascii_art();
+    
     let nickname = get_input("Enter your desired NICK name:");
 
     let username = nickname.clone();
