@@ -19,30 +19,35 @@ pub fn on_message_received(message: Message) {
 
 }
 
-pub fn print_messages(messages: &Vec<Message>) {    
+pub fn print_messages(messages: &Vec<Message>) {
     print_ascii_art();
     for message in messages {
-
-        let prefix = match message.prefix.as_ref() {
-            Some(message) => message,
-            None => ""  
+        let prefix = match &message.prefix {
+            Some(prefix) => {
+                let nickname = prefix.split('!').next().unwrap_or("");
+                format!("<{}>", nickname)
+            }
+            None => String::new(),
         };
 
         match &message.command {
-            Command::Notice(receiver, msg) => {
-                println!("Notice from {}: {}", receiver, msg);
+            Command::PrivMsg(_, msg) => {
+                print!("{} ", format!("\x1b[35m{}", prefix)); // Print the purple nickname without newline
+                println!("{}{}", msg.trim_start_matches(':'), "\x1b[0m"); // Print the message in default color and reset color, removing leading colon
             }
             Command::Join(channel) => {
                 println!("{} joined channel {}", prefix, channel);
             }
-            command => {
-                if let Command::Raw(command, params) = command.raw() {
-                    println!("{} {} {}", prefix, command, params.join(" "));
-                }
+            Command::Raw(command, params) => {
+                println!("{} {} {}", prefix, command, params.join(" "));
             }
-    }
+            _ => {} // Ignore other command types
+        }
     }
 }
+
+
+
 
 pub fn get_input(prompt: &str) -> String {
     print!("\x1B[2J\x1B[1;1H");
@@ -84,7 +89,6 @@ pub async fn send_message(connection: &mut IrcConnection, channel: String) {
         .await
         .unwrap();
             if input == "QUIT" {
-                connection.quit().await.unwrap();
                 break;
             }
         }
