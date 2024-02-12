@@ -32,8 +32,8 @@ pub fn print_messages(messages: &Vec<Message>) {
 
         match &message.command {
             Command::PrivMsg(_, msg) => {
-                print!("{} ", format!("\x1b[35m{}", prefix)); // Print the purple nickname without newline
-                println!("{}{}", msg.trim_start_matches(':'), "\x1b[0m"); // Print the message in default color and reset color, removing leading colon
+                print!("{} ", format!("\x1b[35m{}", prefix)); // uses ansi because crossterm is being fucky 
+                println!("{}{}", msg.trim_start_matches(':'), "\x1b[0m"); 
             }
             Command::Join(channel) => {
                 println!("{} joined channel {}", prefix, channel);
@@ -41,7 +41,7 @@ pub fn print_messages(messages: &Vec<Message>) {
             Command::Raw(command, params) => {
                 println!("{} {} {}", prefix, command, params.join(" "));
             }
-            _ => {} // Ignore other command types
+            _ => {} // ignore other command types for now 
         }
     }
 }
@@ -49,7 +49,7 @@ pub fn print_messages(messages: &Vec<Message>) {
 
 
 
-pub fn get_input(prompt: &str) -> String {
+pub fn get_input(prompt: &str) -> String { // TODO change this
     print!("\x1B[2J\x1B[1;1H");
     print_ascii_art();
     println!("{}", prompt);
@@ -58,7 +58,7 @@ pub fn get_input(prompt: &str) -> String {
     input.trim().to_string()
 }
 
-pub async fn irc_client(connection: &mut IrcConnection, channel: String) {
+pub async fn irc_client(connection: &mut IrcConnection, channel: String) { // TODO this can be improved upon
     sleep(Duration::from_secs(2)).await;
     connection
         .send(Message {
@@ -70,7 +70,7 @@ pub async fn irc_client(connection: &mut IrcConnection, channel: String) {
     sleep(Duration::from_secs(2)).await;
 }
 
-pub async fn send_message(connection: &mut IrcConnection, channel: String) {
+pub async fn send_message(connection: &mut IrcConnection, channel: String) { // this fucking sucks but i dont know how to fix it right now
     print_ascii_art();
     loop {
         let mut input = String::new();
@@ -95,7 +95,7 @@ pub async fn send_message(connection: &mut IrcConnection, channel: String) {
     }
 }
 
-pub fn print_ascii_art() {
+pub fn print_ascii_art() {  
     execute!(io::stdout(), terminal::Clear(terminal::ClearType::All)).unwrap();
     execute!(io::stdout(), cursor::MoveTo(0, 0)).unwrap();
     let mut stdout = io::stdout();
