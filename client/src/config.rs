@@ -1,6 +1,6 @@
 use irc::{config::IrcConfig, users::{User, UserFlags}, IrcConnection};
 use tokio::net::lookup_host;
-use crate::utils::{get_input, print_ascii_art};
+use crate::utils::{get_input, on_message_received, print_ascii_art};
 use crate::utils::print_messages;
 
 pub async fn create_config() -> IrcConfig {
@@ -26,6 +26,6 @@ pub async fn create_config() -> IrcConfig {
             flags: UserFlags::default(),
         })
         //.password
-        .set_receive_handler(print_messages)
+        .set_receive_handler(on_message_received)
         .host(lookup_host(format!("{}:{}", address, port)).await.unwrap().next().unwrap()).unwrap()
 }
