@@ -9,7 +9,7 @@ async fn main() {
 
     print!("\x1B[2J\x1B[1;1H");
     println!("{}", TEXT);
-    println!("Enter channel name:");
+    println!("Enter channel name: ");
     let mut channel = String::new();
     std::io::stdin().read_line(&mut channel).unwrap();
     let channel = channel.trim().to_string();

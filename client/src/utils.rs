@@ -1,7 +1,7 @@
-use std::io;
+use std::{io, sync::mpsc::Receiver};
 
 use std::time::Duration;
-use irc::{IrcConnection, messages::{Message, Params}};
+use irc::{IrcConnection, messages::{Message, Command}};
 use tokio::time::sleep;
 
 const TEXT: &str = include_str!("./ascii.txt");
@@ -9,18 +9,18 @@ const TEXT: &str = include_str!("./ascii.txt");
 pub fn print_messages(msg: Message) {
     let prefix = msg.prefix.unwrap_or_else(|| String::new());
     let command = msg.command;
-    let params = msg.params;
 
-    match command.as_str() {
-        "JOIN" => {
-            println!("{} joined channel {}", prefix, params);
+    match command {
+        Command::Notice(receiver, msg) => {
+            println!("Notice from {}: {}", receiver, msg);
         }
-        "NOTICE" => {
-            let msg = &params.0.last().unwrap()[1..];
-            println!("Notice from {}: {}", prefix, msg);
+        Command::Join(channel) => {
+            println!("{} joined channel {}", prefix, channel);
         }
-        _ => {
-            println!("{} {} {}", prefix, command, params);
+        command => {
+            if let Command::Raw(command, params) = command.raw() {
+                println!("{} {} {}", prefix, command, params.join(" "));
+            }
         }
     }
 }
@@ -39,10 +39,7 @@ pub async fn irc_client(connection: &mut IrcConnection, channel: String) {
     connection
         .send(Message {
             prefix: None,
-            command: "JOIN".to_string(),
-            params: Params(vec![
-                format!("#{}", channel).to_string(),
-            ]),
+            command: Command::Join(format!("#{}", channel).to_string()),
         })
         .await
         .unwrap();
@@ -61,11 +58,10 @@ pub async fn send_message(connection: &mut IrcConnection, channel: String) {
             connection
                 .send(Message {
                 prefix: None,
-                command: "PRIVMSG".to_string(),
-                params: Params(vec![
+                command: Command::PrivMsg( 
                     format!("#{}", channel).to_string(),
                     format!(":{}", input.to_string())
-                ]),
+                ),
             })
         .await
         .unwrap();
