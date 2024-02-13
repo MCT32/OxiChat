@@ -4,6 +4,7 @@ use std::time::Duration;
 use irc::{IrcConnection, messages::{Message, Command}};
 use tokio::time::sleep;
 use crossterm::{execute, terminal, cursor, style::{Print, ResetColor, SetForegroundColor, Color}};
+use crossterm::{QueueableCommand, queue};
 use crate::STATE;
 const TEXT: &str = include_str!("./ascii.txt");
 
@@ -53,6 +54,8 @@ pub fn get_input(prompt: &str) -> String {
 }
 
 pub fn get_message_input(prompt: &str) -> String {
+    let (cols, rows) = terminal::size().expect("Failed to get terminal size");
+    execute!(io::stdout(), cursor::MoveTo(cols + 1, rows)).unwrap();
     print!("{}", prompt); 
     io::stdout().flush().unwrap(); 
     let mut input = String::new();
@@ -73,33 +76,54 @@ pub async fn irc_client(connection: &mut IrcConnection, channel: String) { // TO
     sleep(Duration::from_secs(2)).await;
 }
 
-pub async fn send_message(connection: &mut IrcConnection, channel: String, nickname: String) { // this fucking sucks but i dont know how to fix it right now
+pub async fn send_message(connection: &mut IrcConnection, channel: String, nickname: String) {
     print_ascii_art();
     loop {
         let prompt = format!("<{}> ", nickname).to_string();
         let input = get_message_input(&prompt);
 
         if !input.is_empty() {
-            let message = Message{
-                prefix: None,
-                command: Command::PrivMsg(
-                    format!("#{}", channel).to_string(),
-                    format!(":{}", input.to_string())
-                )
-            };
-            connection
-                .send(message.clone())
-            .await
-            .unwrap();
-            if input == "QUIT" {
-                break;
+            if input.starts_with('/') {
+                match input.split_whitespace().next() {
+                    Some(command) => {
+                        match command {
+                            "/join" => {
+                                let params: Vec<&str> = input.split_whitespace().collect();
+                                if params.len() >= 2 {
+                                    let channel = params[1].to_string();
+                                    connection.send(Message {
+                                        prefix: None,
+                                        command: Command::Join(channel.clone()),
+                                    }).await.unwrap(); // doesnt really do much right now cause we auto join
+                                } else {
+                                    println!("ur gay i cant remember why i put this string here");
+                                }
+                            }
+                            
+                            // more commands to cum !
+
+                            _ => println!("Invalid command"),
+                        }
+                    }
+                    None => println!("Invalid command"),
+                }
+            } else {
+                let message = Message {
+                    prefix: None,
+                    command: Command::PrivMsg(format!("#{}", channel).to_string(), format!(":{}", input.to_string())),
+                };
+                connection.send(message.clone()).await.unwrap();
+                if input == "QUIT" {
+                    break;
+                }
+                let mut state = STATE.write().unwrap();
+                state.messages.push(message);
+                print_messages(&state.messages);
             }
-            let mut state = STATE.write().unwrap();
-            state.messages.push(message);
-            print_messages(&state.messages);
         }
     }
 }
+
 
 pub fn print_ascii_art() {  
     execute!(io::stdout(), terminal::Clear(terminal::ClearType::All)).unwrap();

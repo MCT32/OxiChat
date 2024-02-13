@@ -43,6 +43,8 @@ async fn main() {
 
     let nickname = config.user.nickname.clone();
 
+    ui::draw_member_block(&terminal);
+
     utils::send_message(&mut connection, channel, nickname).await;
 }
 
