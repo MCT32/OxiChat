@@ -1,22 +1,18 @@
-use std::io;
+use std::{io, sync::RwLock};
 use std::io::Write;
 use std::time::Duration;
 use irc::{IrcConnection, messages::{Message, Command}};
 use tokio::time::sleep;
 use crossterm::{execute, terminal, cursor, style::{Print, ResetColor, SetForegroundColor, Color}};
-
 use crate::STATE;
-
 const TEXT: &str = include_str!("./ascii.txt");
 
 pub fn on_message_received(message: Message) {
-
     let mut state = STATE.write().unwrap();
 
     state.messages.push(message);
 
     print_messages(&state.messages);
-
 }
 
 pub fn print_messages(messages: &Vec<Message>) {
@@ -46,17 +42,24 @@ pub fn print_messages(messages: &Vec<Message>) {
     }
 }
 
-
-
-
-pub fn get_input(prompt: &str) -> String { // TODO change this
-    print!("\x1B[2J\x1B[1;1H");
-    print_ascii_art();
-    println!("{}", prompt);
+pub fn get_input(prompt: &str) -> String {
+    print!("\x1B[2J\x1B[1;1H"); 
+    print_ascii_art(); 
+    print!("{}", prompt); 
+    io::stdout().flush().unwrap(); 
     let mut input = String::new();
     io::stdin().read_line(&mut input).expect("Failed to read input");
     input.trim().to_string()
 }
+
+pub fn get_message_input(prompt: &str) -> String {
+    print!("{}", prompt); 
+    io::stdout().flush().unwrap(); 
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).expect("Failed to read input");
+    input.trim().to_string()
+}
+
 
 pub async fn irc_client(connection: &mut IrcConnection, channel: String) { // TODO this can be improved upon
     sleep(Duration::from_secs(2)).await;
@@ -70,27 +73,30 @@ pub async fn irc_client(connection: &mut IrcConnection, channel: String) { // TO
     sleep(Duration::from_secs(2)).await;
 }
 
-pub async fn send_message(connection: &mut IrcConnection, channel: String) { // this fucking sucks but i dont know how to fix it right now
+pub async fn send_message(connection: &mut IrcConnection, channel: String, nickname: String) { // this fucking sucks but i dont know how to fix it right now
     print_ascii_art();
     loop {
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
-        let input = input.trim();
+        let prompt = format!("<{}> ", nickname).to_string();
+        let input = get_message_input(&prompt);
 
         if !input.is_empty() {
-            connection
-                .send(Message {
+            let message = Message{
                 prefix: None,
-                command: Command::PrivMsg( 
+                command: Command::PrivMsg(
                     format!("#{}", channel).to_string(),
                     format!(":{}", input.to_string())
-                ),
-            })
-        .await
-        .unwrap();
+                )
+            };
+            connection
+                .send(message.clone())
+            .await
+            .unwrap();
             if input == "QUIT" {
                 break;
             }
+            let mut state = STATE.write().unwrap();
+            state.messages.push(message);
+            print_messages(&state.messages);
         }
     }
 }

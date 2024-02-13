@@ -5,15 +5,15 @@ use crate::utils::{get_input, on_message_received, print_ascii_art};
 pub async fn create_config() -> IrcConfig {
     print_ascii_art();
     
-    let nickname = get_input("Enter your desired NICK name:");
+    let nickname = get_input("Enter your desired NICK name: ");
 
     let username = nickname.clone();
     let hostname = nickname.clone();
     let servername = nickname.clone();
     let realname = nickname.clone(); // TODO: all of this will come back after the tui...exists.
 
-    let address = get_input("Enter the server address:");
-    let port: u16 = get_input("Enter port:").parse().expect("Invalid port");
+    let address = get_input("Enter the server address: ");
+    let port: u16 = get_input("Enter port: ").parse().expect("Invalid port");
 
     IrcConfig::builder()
         .user(User{
