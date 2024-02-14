@@ -1,27 +1,30 @@
 mod config;
 mod client_utils;
-mod ui_utils;
 
-use std::{io::{self, stdout, ErrorKind, Read, Stdout, Write}, string, sync::RwLock, thread, time::Duration};
-use client_utils::send_message;
-use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
-use crossterm::event::{read, poll, Event, KeyCode, KeyModifiers, KeyEventKind};
-use crossterm::style::{Print, SetBackgroundColor, SetForegroundColor, Color};
-use crossterm::{execute, QueueableCommand};
-use crossterm::cursor::{MoveTo};
+use std::{io::{stdout, Write}, sync::RwLock, thread, time::Duration};
 
-use irc::{error, messages::{Command, Message}, IrcConnection};
+use crossterm::event::{read, poll, Event, KeyCode, KeyModifiers};
+use crossterm::terminal::{self, Clear, ClearType};
+use crossterm::QueueableCommand;
+use crossterm::cursor::MoveTo;
 
-use crate::ui_utils::{get_terminal_size};
-use crate::config::{create_config};
+use client_utils::{join_channel, send_message};
+
+use irc::IrcConnection;
 
 const NERDROOM_ASCII: &str = include_str!("./ascii.txt");
+
+struct State {
+    chat: Vec<String>
+}
+
+const STATE: RwLock<State> = RwLock::new(State {chat: Vec::new()});
 
 pub struct Rect {
     x: usize,
     y: usize,
     w: usize,
-    h: usize, //1:29:40
+    h: usize, 
 }
 
 fn chat_window(stdout: &mut impl Write, chat: &[String], boundary: Rect) {
@@ -51,7 +54,6 @@ async fn main() {
     let mut nickname = String::new(); 
     let mut channel = String::new(); 
 
-
     let mut configured = false;
 
     let mut chat = Vec::new();
@@ -77,51 +79,56 @@ async fn main() {
                         }
                         KeyCode::Enter => {
                             if prompt.starts_with('/') {
-                                match &prompt[1..].trim() {
-                                    &"conf" => { 
+                                match &prompt.split_once(' ').unwrap().0 {
+                                    &"/conf" => { 
                                         // this will take 3 arguments; nickname, address, port. eg: '/conf Binkus irc.megacraftingtable.chat 6667"
                                         // would connect you to 'irc.megacraftingtable.net' on port '6667' using nickname 'Binkus.'
 
                                         let parts: Vec<&str> = prompt.split_whitespace().collect();
                                         if parts.len() == 4 {
-                                            let nickname = parts[1];
-                                            let address = parts[2];
-                                            let port = parts[3].parse::<u16>().unwrap_or_default(); 
-                                            let mut connection = config::create_config(nickname.to_string(), address.to_string(), port).await;
+                                            nickname = parts[1].to_string(); // this cunt extracts the name out the fucka
+                                            let address = parts[2]; // this cunt does the same thing for server addy
+                                            let port = parts[3].parse::<u16>().unwrap_or_default();  // i cant remember why i unwrapped this but whatever
+                                            let config = config::create_config(nickname.to_string(), address.to_string(), port).await;
+                                            connection = Some(config.connect().await.unwrap());
                                             // configured = true;
                                             chat.push(prompt.clone());
                                         } else {
-                                            let error_msg = String::new();
                                             let error_msg = "Invalid arguments.";
                                             chat.push(error_msg.to_string());
                                         }
                                     }
 
-                                    &"join" => {
-                                        // will take one argument; channel. if you arent in a server, then this will display a message saying that you
-                                        // are not currently connected to a server, will prompt you to enter one. 
-
-                                        todo!() // execute join block, join channel
+                                    &"/join" => {
+                                        let parts: Vec<&str> = prompt.split_whitespace().collect();
+                                        if parts.len() == 2 {
+                                            let channel = parts[1].to_string();
+                                            //join_channel(&mut connection.clone().unwrap(), channel).await;
+                                        } else {
+                                            let error_msg = "Invalid arguments.";
+                                            chat.push(error_msg.to_string());
+                                        }
                                     }
 
-                                    &"leave" => {
+                                    &"/leave" => {
                                         todo!() // i dont know if theres a leave command yet | EDIT: there is. not implemented yet
                                     }
 
-                                    &"quit" => {
+                                    &"/quit" => {
                                         todo!() // will leave server.
                                     }
 
                                     _ => {
-                                        todo!() // if invalid
+                                        let error_msg = "Invalid command.";
+                                        chat.push(error_msg.to_string());
                                     }
 
                                 }
                             } else {
                                 chat.push(prompt.clone());
 
-                                if let Some(connection) = connection {
-                                    send_message(&mut connection, prompt, nickname, channel).await;
+                                if let Some(mut connection) = connection.clone() {
+                                    send_message(&mut connection, prompt.clone(), nickname.clone(), channel.clone()).await;
                                 }
 
                             }

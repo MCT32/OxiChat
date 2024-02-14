@@ -1,7 +1,7 @@
 use irc::{config::IrcConfig, users::{User, UserFlags}};
 use tokio::net::lookup_host;
 
-use crate::client_utils::{on_message_received};
+use crate::client_utils::on_message_received;
 
 pub async fn create_config(nickname: String, address: String, port: u16) -> IrcConfig {
     let nickname = nickname;
