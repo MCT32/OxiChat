@@ -1,19 +1,18 @@
 use irc::{config::IrcConfig, users::{User, UserFlags}};
 use tokio::net::lookup_host;
-use crate::utils::{get_input, on_message_received, print_ascii_art};
 
-pub async fn create_config() -> IrcConfig {
-    print_ascii_art();
-    
-    let nickname = get_input("Enter your desired NICK name: ");
+use crate::client_utils::{on_message_received};
+
+pub async fn create_config(nickname: String, address: String, port: u16) -> IrcConfig {
+    let nickname = nickname;
 
     let username = nickname.clone();
     let hostname = nickname.clone();
     let servername = nickname.clone();
-    let realname = nickname.clone(); // TODO: all of this will come back after the tui...exists.
+    let realname = nickname.clone(); // TODO: all of this will come back after the tui...exists. EDIT nevermind lol fuck allat
 
-    let address = get_input("Enter the server address: ");
-    let port: u16 = get_input("Enter port: ").parse().expect("Invalid port");
+    let address = address;
+    let port: u16 = port;
 
     IrcConfig::builder()
         .user(User{
