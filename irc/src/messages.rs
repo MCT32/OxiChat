@@ -115,6 +115,7 @@ impl FromStr for Message {
                     "OPER" => Command::Oper(params[0].clone(), params[1].clone()),
                     "SQUIT" => Command::Oper(params[0].clone(), params[1].clone()),
                     "TOPIC" => Command::Topic(params[0].clone(), if params.len() > 1 { Some(params[1].clone()) } else { None }),
+                    "NAMES" => Command::Names(params),
                     _ => Command::Raw(command, params)
                 }
             })
@@ -137,6 +138,7 @@ pub enum Command {
     Oper(String, String),
     SQuit(String, String),
     Topic(String, Option<String>),
+    Names(Vec<String>),
     // UPDATE: Shouldn't be needed because the message will only be send/received in server-to-server communication
     Raw(String, Vec<String>),
 }
@@ -166,6 +168,7 @@ impl Command {
             Command::Oper(user, password) => Command::Raw("OPER".to_string(), vec![user.clone(), password.clone()]),
             Command::SQuit(user, password) => Command::Raw("SQUIT".to_string(), vec![user.clone(), password.clone()]),
             Command::Topic(channel, topic) => Command::Raw(channel.clone(), if topic.is_some() { vec![topic.clone().unwrap()] } else { vec![] }),
+            Command::Names(channels) => Command::Raw("NAMES".to_string(), channels.clone()),
             Command::Raw(_, _) => self.clone(), // svelte says u dont know how to write rust. also i cloned self
         }
     }
