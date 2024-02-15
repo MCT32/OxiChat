@@ -111,7 +111,8 @@ impl FromStr for Message {
                         }
 
                         Command::Mode(params[0].clone(), set, flags)
-                    }
+                    },
+                    "OPER" => Command::Oper(params[0].clone(), params[1].clone()),
                     _ => Command::Raw(command, params)
                 }
             })
@@ -131,6 +132,8 @@ pub enum Command {
     Reply(Result<Reply, ErrorReply>),
     Part(Vec<String>),
     Mode(String, bool, UserFlags),
+    Oper(String, String),
+    // UPDATE: Shouldn't be needed because the message will only be send/received in server-to-server communication
     Raw(String, Vec<String>),
 }
 
@@ -156,6 +159,7 @@ impl Command {
             Command::Mode(user, set, flags) => Command::Raw("MODE".to_string(), vec![user.to_string(),
                 match set { false => "-".to_string(), true => "+".to_string() } + &format!("{}", flags).to_string()
             ]),
+            Command::Oper(user, password) => Command::Raw("OPER".to_string(), vec![user.clone(), password.clone()]),
             Command::Raw(_, _) => self.clone(), // svelte says u dont know how to write rust. also i cloned self
         }
     }
