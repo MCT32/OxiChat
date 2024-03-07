@@ -1,168 +1,144 @@
-mod config;
 mod client_utils;
+mod ui_utils;
+mod config;
 
-use std::{io::{stdout, Write}, sync::RwLock, thread, time::Duration};
-use std::process::exit;
-use crossterm::event::{read, poll, Event, KeyCode, KeyModifiers, EventStream};
+use client_utils::*;
+use crossterm::{cursor::MoveTo, event::{self, poll, read, Event, EventStream, KeyCode, KeyModifiers}};
 use crossterm::terminal::{self, Clear, ClearType};
 use crossterm::QueueableCommand;
-use crossterm::cursor::MoveTo;
+use irc::{config::IrcConfig, error::IrcConnectError, IrcConnection};
+use ui_utils::Screen;
+
+use std::{env, io::{self, stdin, stdout, Write}, process, string, sync::RwLock, thread, time::Duration};
+use std::sync::{Mutex, Arc};
+use std::process::exit;
+
 use futures::{FutureExt, StreamExt};
-
-use client_utils::{join_channel, send_message};
-
-use irc::IrcConnection;
 
 const NERDROOM_ASCII: &str = include_str!("./ascii.txt");
 
-struct State {
-    chat: Vec<String>
-}
+pub type ChatsRef = Arc<RwLock<Vec<String>>>;
 
-const STATE: RwLock<State> = RwLock::new(State {chat: Vec::new()});
-
-pub struct Rect {
-    x: usize,
-    y: usize,
-    w: usize,
-    h: usize, 
-}
-
-fn chat_window(stdout: &mut impl Write, chat: &[String], boundary: Rect) {
-
-    let n = chat.len();
-    let m = n.checked_sub(boundary.h).unwrap_or(0);
-
-    for (dy, line) in chat.iter().skip(m).enumerate() {
-        stdout.queue(MoveTo(boundary.x as u16, (boundary.y + dy) as u16 )).unwrap();
-        let bytes = line.as_bytes();
-        stdout.write(bytes.get(0..boundary.w).unwrap_or(bytes)).unwrap();
-    }
+lazy_static::lazy_static! {
+    pub static ref CHATS: ChatsRef = Arc::new(RwLock::new(Vec::new()));
 }
 
 #[tokio::main]
-async fn main() {
+pub async fn main() {
+
+    // INITIALIZE ! {
+
     let mut stdout = stdout();
 
-    let _ = terminal::enable_raw_mode().unwrap();
-    let (mut w, mut h) = terminal::size().unwrap();
-    let bar_char = "━";
-    let mut bar = bar_char.repeat(w as usize);
-    let mut prompt = String::new();
+    let _ = crossterm::terminal::enable_raw_mode();
+    stdout.queue(Clear(ClearType::All)).unwrap();
 
-    let mut connection: Option<IrcConnection> = None; 
-    let mut nickname = String::new(); 
-    let mut channel = String::new(); 
+    let (mut h, mut w) = terminal::size().expect("Failed to get terminal size!");
+    
+    let bar_char = "█";
 
-    let mut configured = false;
+    let mut client_screen = Screen {
+        stdout: stdout,
+        h: h,
+        w: w,
+        chats: CHATS.clone(),
+        prompt: String::new(),
+        bar_char: bar_char.to_string(),
+        bar: bar_char.repeat(w as usize)
+    };
 
-    let mut chat = Vec::new();
+    let startup_args: Vec<String> = env::args().collect(); // collects the arguments passed when the fucka was launched
+    if startup_args.len() == 4 { // TODO: REMOVE CHANNEL FROM STARTUP ARGS [len() == 4]
+        {}
+    } else {
+        println!("Invalid arguments. Correct usage: \n'NerdRoom <NICKNAME> <SERVERADDRESS> <PORT>'");
+        process::exit(0)
+    }
+    
+    let mut client_configuration: Client = Client::default_config(startup_args.clone()); // initializes the client config with wtv args were passed on strt
+    let mut irc_configuration: IrcConfig = config::create_irc_config(client_configuration.clone()).await;        // initializes irc config with client config
+    // INITIALIZE ! }
+    
     let mut reader = EventStream::new();
-    loop {
+
+    loop { // main event loop.
+
+        Screen::render_all(&mut client_screen);
+
         let event = reader.next().await.unwrap().unwrap();
         match event {
             Event::Resize(nw, nh) => {
-                w = nw;
-                h = nh;
-                bar = bar_char.repeat(w as usize);
+                client_screen.w = nw;
+                client_screen.h = nh;
+                client_screen.bar = bar_char.repeat(w as usize); 
             }
             Event::Paste(data) => {
-                prompt.push_str(&data);
+                client_screen.prompt.push_str(&data);
             }
             Event::Key(event) => {
                 match event.code {
                     KeyCode::Char(x) => {
                         if x == 'c' && event.modifiers.contains(KeyModifiers::CONTROL) {
-                            terminal::disable_raw_mode().unwrap();
-                            exit(0);
+
+                            break;
                         } else {
-                            prompt.push(x);
+                            client_screen.prompt.push(x);
                         }
                     }
                     KeyCode::Enter => {
-                        if prompt.starts_with('/') {
-                            match &prompt.split(' ').next().unwrap() {
+                         if client_screen.prompt.starts_with("/") {
+                            match &client_screen.prompt.split(' ').next().unwrap() {
                                 &"/conf" => {
                                     // this will take 3 arguments; nickname, address, port. eg: '/conf Binkus irc.megacraftingtable.chat 6667"
                                     // would connect you to 'irc.megacraftingtable.net' on port '6667' using nickname 'Binkus.'
-
-                                    let parts: Vec<&str> = prompt.split_whitespace().collect();
-                                    if parts.len() == 4 {
-                                        nickname = parts[1].to_string(); // this cunt extracts the name out the fucka
-                                        let address = parts[2]; // this cunt does the same thing for server addy
-                                        let port = parts[3].parse::<u16>().unwrap_or_default();  // i cant remember why i unwrapped this but whatever
-                                        let config = config::create_config(nickname.to_string(), address.to_string(), port).await;
-                                        connection = Some(config.connect().await.unwrap());
-                                        // configured = true;
-                                        chat.push(prompt.clone());
-                                    } else {
-                                        let error_msg = "Invalid arguments.";
-                                        chat.push(error_msg.to_string());
-                                    }
+                                    Client::edit_client_config(&mut client_configuration, client_screen.prompt.clone()).await;
+                                    irc_configuration = Client::edit_connection(&client_configuration, irc_configuration.clone()).await;
                                 }
-
+                        
+                                &"/connect" => {
+                                    client_configuration.connection = Some(Client::connect_command(irc_configuration.clone()).await);
+                                }
+                        
                                 &"/join" => {
-                                    let parts: Vec<&str> = prompt.split_whitespace().collect();
-                                    if parts.len() == 2 {
-                                        let channel = parts[1].to_string();
-                                        //join_channel(&mut connection.clone().unwrap(), channel).await;
-                                    } else {
-                                        let error_msg = "Invalid arguments.";
-                                        chat.push(error_msg.to_string());
-                                    }
+                                     Client::join_command(&client_configuration.clone(), client_screen.prompt.clone()).await;
                                 }
-
+                        
                                 &"/leave" => {
                                     todo!() // i dont know if theres a leave command yet | EDIT: there is. not implemented yet
                                 }
-
+                        
                                 &"/quit" => {
                                     todo!() // will leave server.
                                 }
-
+                        
                                 _ => {
                                     let error_msg = "Invalid command.";
-                                    chat.push(error_msg.to_string());
+                                    vector_vendor(error_msg.to_string());
                                 }
-
+                            } 
+                            if client_configuration.connection.is_some() {
+                                Client::send_message(client_configuration.clone(), client_screen.prompt.clone()).await;
                             }
-                        } else {
-                            chat.push(prompt.clone());
-
-                            if let Some(mut connection) = connection.clone() {
-                                send_message(&mut connection, prompt.clone(), nickname.clone(), channel.clone()).await;
-                            }
-
                         }
-                        prompt.clear();
+
+                        vector_vendor(client_screen.prompt.clone());
+                        client_screen.prompt.clear();
                     }
                     KeyCode::Backspace => {
-                        prompt.pop();
+                        client_screen.prompt.pop();
                     }
-                    _ => {}
+                    _ => {
+                    }
                 }
             }
-            _ => {}
+            _ => {
+            }
         }
 
-        stdout.queue(Clear(ClearType::All)).unwrap();
-        chat_window(&mut stdout, &chat, Rect {
-            x: 0,
-            y: 0,
-            w: w as usize,
-            h: h as usize - 2,
-        });
-
-        stdout.queue(MoveTo(0, h - 2)).unwrap();
-        stdout.write(bar.as_bytes()).unwrap();
-
-        stdout.queue(MoveTo(0, h - 1)).unwrap();
-
-        {
-            let bytes = prompt.as_bytes();
-            stdout.write(bytes.get(0..w as usize).unwrap_or(bytes)).unwrap();
-        }
-
-        stdout.flush().unwrap();
+        client_screen.stdout.queue(Clear(ClearType::All)).unwrap();
+        Screen::render_all(&mut client_screen);
     }
+
+    terminal::disable_raw_mode().unwrap();
+        
 }
