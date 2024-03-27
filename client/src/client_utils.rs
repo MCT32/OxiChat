@@ -1,18 +1,26 @@
+use crossterm::event::Event;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use crossterm::terminal;
+use irc::*; use crate::errors::argument_error;
+// apparantly this doesnt import everything, i dont understand the fucking crate system
+use crate::CHATS;
+use crate::ui_utils::*;
+
+use std::process::exit;
 use std::{fmt::Write, ptr::null, time::Duration};
 
-use crossterm::{queue, terminal::ClearType};
-use futures::channel::oneshot::channel;
-use irc::{config::IrcConfig, messages::{Command, Message}, IrcConnection};
+use irc::{config::IrcConfig, messages::{Command, Message}, IrcConnection}; // this might be redundant
+
 use crossterm::{terminal::Clear, QueueableCommand};
+use crossterm::{queue, terminal::ClearType};
 use crossterm::cursor::MoveTo;
-use irc::error;
 
-use tokio::time::{sleep, Sleep};
-
-use crate::{config, ui_utils::Screen, ChatsRef, CHATS};
+use tokio::time::{sleep, Sleep}; // fucking fuck this library
 
 #[derive(Clone)]
-pub struct Client {
+pub struct Client { // this sucks
     pub nickname: String,
     pub address: String,
     pub port: u16,
@@ -22,49 +30,36 @@ pub struct Client {
     pub connection: Option<IrcConnection>
 }
 
-impl Client { // these are methods
-    pub async fn edit_client_config(&mut self, prompt: String) {
+pub struct  Faculties {
+    pub client: Option<Client>,
+    pub client_screen: Option<Client_Screen>,
+    pub irc_configuration: Option<IrcConfig>
+}
 
-        let parts: Vec<&str> = prompt.split_whitespace().collect();
-            if parts.len() == 4 {
-                let new_nickname = parts[1].to_string(); // this cunt extracts the name out the fucka
-                let new_address = parts[2].to_owned(); // this cunt does the same thing for server addy
-                let new_port = parts[3].parse::<u16>().unwrap_or_default();  // i cant remember why i unwrapped this but whatever
+impl Client { // configuration methods
 
-                self.nickname = new_nickname;
-                self.address = new_address;
-                self.port = new_port;
+    pub fn default_client_configuration(args: Vec<String>) -> Self {
+        let nickname = args[1].clone();
+        let address = args[2].clone();
+        let port = args[3].parse().expect("ERROR: PORT MUST BE A VALID INTEGER");
 
-                // boinkus
-            } else {
-                let error_msg = "Invalid arguments.";
-                vector_vendor(error_msg.to_string());
-            }
-    }
-    pub async fn edit_connection(&self, mut irc_configuration: IrcConfig, ) -> IrcConfig {
-        irc_configuration = config::create_irc_config(self.clone()).await; 
-        return irc_configuration;
+        Client {
+            nickname,
+            address,
+            port,
+            channel: "test".to_string(),
+            connection: None,
+        }
     }
 }
 
-impl Client { // these are associated functions
-    pub fn default_config(arguments: Vec<String>) -> Self {
-        Self {
-            nickname: arguments[1].clone(),
-            address: arguments[2].clone(),
-            port: arguments[3].parse().unwrap(),
-
-            channel: "test".to_string(),
-
-            connection: None
-        }
-    }
-    pub async fn connect_command(irc_configuration: IrcConfig) -> IrcConnection {
+impl Client { // connection methods. this whole impl block is bad
+    pub async fn connect_command(mut irc_configuration: & mut IrcConfig) -> IrcConnection {
         let connection = irc_configuration.connect().await.unwrap();
         connection
     }
-    pub async fn join_command(&self, prompt: String) {
-        let parts: Vec<&str> = prompt.split_whitespace().collect();
+    pub async fn join_command(&self, client_screen: &Client_Screen) {
+        let parts: Vec<&str> = client_screen.input.split_whitespace().collect();
         if parts.len() == 2 {
             let channel = parts[1].to_string();
 
@@ -86,28 +81,112 @@ impl Client { // these are associated functions
         todo!()
     }
     pub async fn quit_command() {
-
+        todo!()
     }
     pub async fn send_message(client_configuration: Client, prompt: String) {
         client_configuration.connection.unwrap()
                 .send(Message {
                 prefix: None,
                 command: Command::PrivMsg( 
-                    format!("{}", client_configuration.channel).to_string(),
+                    format!("{} ", client_configuration.channel).to_string(),
                     format!(":{}", prompt.to_string())
                 ), }).await.unwrap();
                 sleep(Duration::from_millis(500)).await;
     }
 }
 
+impl Faculties {
+    pub async fn create(client: Client, client_screen: Client_Screen, irc_configuration: IrcConfig) -> Self {
+        Faculties {
+            client: Some(client),
+            client_screen: Some(client_screen),
+            irc_configuration: Some(irc_configuration)
+        }
+    }
+}
 
-pub fn message_receiver(msg: Message) {
+pub fn check_args_valid(args: &Vec<String>) -> bool { // Checks if startup arguments are valid
 
-    vector_vendor(msg.to_string());
+    let rook: u16 = args[3].parse().expect("ERROR: PORT MUST BE A VALID INTEGER"); // cum
+
+    if args.len() == 4 {
+        println!("ARGUMENTS {}, {}, {},  ARE VALID", args[1], args[2], args[3]);
+        return true;
+    } else {
+        deinitialize_screen();
+        argument_error();
+        return false;
+    }
+}
+
+pub async fn command_lexer(client_screen: &mut Client_Screen, client: &mut Client, mut irc_config: &mut IrcConfig) { // this really sucks but idk what to do about it
+    match &client_screen.input.split(' ').next().unwrap() {
+        &"/conf" => {
+           // this command is fucking retarded.
+        }
+
+        &"/connect" => {
+            client.connection = Some(Client::connect_command(&mut irc_config).await);
+        }
+
+        &"/join" => {
+            
+            Client::join_command(&client, &client_screen).await;
+        }
+
+        &"/leave" => {
+            todo!() // i dont know if theres a leave command yet | EDIT: there is. not implemented yet
+        }
+
+        &"/quit" => {
+            todo!() // will leave server.
+        }
+
+        _ => {
+            let error_msg = "Invalid command.";
+            vector_vendor(error_msg.to_string());
+        }
+    } 
+}
+
+pub async fn key_handler(mut client_screen: &mut Client_Screen, mut client: &mut Client, mut irc_config: &mut IrcConfig, event: KeyEvent) { // KEY HANDLER takes an event as an input and does something with it.
+    match event.code {
+        KeyCode::Char(x) => {
+            if x == 'c' && event.modifiers.contains(KeyModifiers::CONTROL) { // ctrl c my beloved <3
+                exit(0); 
+            } else {
+                client_screen.input.push(x);
+            }
+        } // This just adds the character to the input string.
+
+        KeyCode::Enter => {
+            if client_screen.input.starts_with("/") {
+                command_lexer(client_screen, &mut client, &mut irc_config).await;
+            } else {
+                todo!() // this needs to just send the message. i dont need to append it to the chat vector.
+            }
+        }
+
+        _ => {
+            println!("
+            ERROR: INVALID KEYCODE!\n...somehow. Good job. I have no idea how you did this.
+            ");
+            deinitialize_screen();
+        }
+    }
 
 }
 
-pub fn vector_vendor(message: String) { // this is a method to push whatever is passed to it to the CHATS vector.
+pub fn message_receiver(msg: Message) {
+    vector_vendor(msg.to_string());
+}
+
+pub fn vector_vendor(msg: String) {
     let mut chats = CHATS.write().unwrap();
-    chats.push(message);
+    chats.push(msg);
+}
+
+pub fn kill_all() {
+    let _ = terminal::disable_raw_mode();
+    exit(0)
 }
