@@ -6,6 +6,7 @@ use std::{io::{stdout, Stdout, Write}, sync::{Arc, RwLock}};
 
 use crate::{ChatsRef, Client, CHATS};
 
+#[derive(Debug, Clone)]
 pub struct Client_Screen {
 
     pub w: u16,
@@ -37,6 +38,10 @@ impl Client_Screen {
             input: "".to_string(),
         }
     }
+}
+
+pub fn renderer(client_screen: Client_Screen) {
+    
 }
 
 pub fn initialize_screen() {

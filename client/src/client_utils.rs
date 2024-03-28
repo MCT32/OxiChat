@@ -19,7 +19,7 @@ use crossterm::cursor::MoveTo;
 
 use tokio::time::{sleep, Sleep}; // fucking fuck this library
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Client { // this sucks
     pub nickname: String,
     pub address: String,
@@ -30,6 +30,7 @@ pub struct Client { // this sucks
     pub connection: Option<IrcConnection>
 }
 
+#[derive(Debug)]
 pub struct  Faculties {
     pub client: Option<Client>,
     pub client_screen: Option<Client_Screen>,
@@ -74,7 +75,7 @@ impl Client { // connection methods. this whole impl block is bad
             sleep(Duration::from_secs(1)).await;
         } else {
             let error_msg = "Invalid arguments.";
-            vector_vendor(error_msg.to_string());
+            vector_vendor(&error_msg.to_string());
         }
     }
     pub async fn part_command() {
@@ -119,19 +120,20 @@ pub fn check_args_valid(args: &Vec<String>) -> bool { // Checks if startup argum
     }
 }
 
-pub async fn command_lexer(client_screen: &mut Client_Screen, client: &mut Client, mut irc_config: &mut IrcConfig) { // this really sucks but idk what to do about it
-    match &client_screen.input.split(' ').next().unwrap() {
+pub async fn command_lexer(faculties: &mut Faculties) { // this really sucks but idk what to do about it
+    match &faculties.client_screen.as_mut().unwrap().input.split(' ').next().unwrap() {
         &"/conf" => {
            // this command is fucking retarded.
         }
 
         &"/connect" => {
-            client.connection = Some(Client::connect_command(&mut irc_config).await);
+            faculties.client.as_mut().unwrap().connection = Some(Client::connect_command(&mut faculties.irc_configuration.as_mut().unwrap()).await);
+
         }
 
         &"/join" => {
             
-            Client::join_command(&client, &client_screen).await;
+            _ = Some(Client::join_command(&faculties.client.as_mut().unwrap(), &faculties.client_screen.as_mut().unwrap()).await);
         }
 
         &"/leave" => {
@@ -144,29 +146,35 @@ pub async fn command_lexer(client_screen: &mut Client_Screen, client: &mut Clien
 
         _ => {
             let error_msg = "Invalid command.";
-            vector_vendor(error_msg.to_string());
+            vector_vendor(&error_msg.to_string());
         }
     } 
 }
 
-pub async fn key_handler(mut client_screen: &mut Client_Screen, mut client: &mut Client, mut irc_config: &mut IrcConfig, event: KeyEvent) { // KEY HANDLER takes an event as an input and does something with it.
+pub async fn key_handler(faculties: &mut Faculties, event: KeyEvent) { // KEY HANDLER takes an event as an input and does something with it.
     match event.code {
         KeyCode::Char(x) => {
             if x == 'c' && event.modifiers.contains(KeyModifiers::CONTROL) { // ctrl c my beloved <3
                 exit(0); 
             } else {
-                client_screen.input.push(x);
+                faculties.client_screen.as_mut().unwrap().input.push(x);
             }
         } // This just adds the character to the input string.
 
         KeyCode::Enter => {
-            if client_screen.input.starts_with("/") {
-                command_lexer(client_screen, &mut client, &mut irc_config).await;
+            if faculties.client_screen.as_mut().unwrap().input.clone().starts_with("/") {
+                command_lexer(faculties).await;
             } else {
-                todo!() // this needs to just send the message. i dont need to append it to the chat vector.
+
+                if faculties.client.as_mut().unwrap().connection.is_some() {
+                    Client::send_message(faculties.client.clone().unwrap(), faculties.client_screen.clone().unwrap().input).await; // this needs to just send the message. i dont need to append it to the chat vector.
+                } else {
+                    vector_vendor(&faculties.client_screen.as_ref().unwrap().input);
+                    let _ = &faculties.client_screen.as_mut().unwrap().input.clear();
+                    return;
+                }
             }
         }
-
         _ => {
             println!("
             ERROR: INVALID KEYCODE!\n...somehow. Good job. I have no idea how you did this.
@@ -178,12 +186,12 @@ pub async fn key_handler(mut client_screen: &mut Client_Screen, mut client: &mut
 }
 
 pub fn message_receiver(msg: Message) {
-    vector_vendor(msg.to_string());
+    vector_vendor(&msg.to_string());
 }
 
-pub fn vector_vendor(msg: String) {
+pub fn vector_vendor(msg: &String) {
     let mut chats = CHATS.write().unwrap();
-    chats.push(msg);
+    chats.push(msg.to_string());
 }
 
 pub fn kill_all() {

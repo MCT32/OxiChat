@@ -21,7 +21,9 @@ use crossterm::QueueableCommand;
 
 use lazy_static::lazy_static;
 
-use std::{env, io::{self, stdin, stdout, Write}, process, string, sync::RwLock, thread, time::Duration};
+use std::backtrace;
+use std::fmt::Write;
+use std::{env, io::{self, stdin, stdout}, process, string, sync::RwLock, thread, time::Duration};
 use std::sync::{Mutex, Arc};
 use std::process::exit;
 
@@ -55,7 +57,7 @@ async fn main() { // async main function. this probably has too much logic in it
     let mut client_screen = Client_Screen::default_client_screen(); // instantiate client screen
     let mut irc_configuration: IrcConfig = config::create_irc_config(client.clone()).await;
 
-    // let mut faculties = Faculties::create(client, client_screen, irc_configuration);
+    let mut faculties = Faculties::create(client, client_screen.clone(), irc_configuration).await;
 
     // client::connect. need to implement this
 
@@ -67,20 +69,18 @@ async fn main() { // async main function. this probably has too much logic in it
             Event::Resize(nw, nh) => {
                 client_screen.w = nw;
                 client_screen.h = nh;
+                client_screen.bar = client_screen.bar_char.repeat(w as usize);
             }
-
-            Event::Paste(data) => {
-                client_screen.input.push_str(&data);
-            }
-
             Event::Key(event) => {
-                key_handler(&mut client_screen, &mut client, &mut irc_configuration, event).await;
+                key_handler(&mut faculties, event).await;
             }
             _ => {
                 terminal_error();
             }
         }
+        let chats = CHATS.read().unwrap();
+        println!("{:?}", chats)
 
     } // main event loop ends here.
 
-} // async main funciton ends here. that should be pretty obvious though. 
+} // async main funciton ends here. that should be pretty obvious though. v
