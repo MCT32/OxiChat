@@ -1,9 +1,12 @@
 use std::time::Duration;
 
-use irc::{config::IrcConfig, users::{User, UserFlags}};
+use irc::{
+    config::IrcConfig,
+    users::{User, UserFlags},
+};
 use tokio::{net::lookup_host, time::sleep};
 
-use crate::client_utils::{message_receiver, Client}; 
+use crate::utils::{message_receiver, Client};
 
 pub async fn create_irc_config(config: Client) -> IrcConfig {
     let nickname = config.nickname;
@@ -17,7 +20,7 @@ pub async fn create_irc_config(config: Client) -> IrcConfig {
     let port: u16 = config.port;
 
     IrcConfig::builder()
-        .user(User{
+        .user(User {
             nickname,
             username,
             hostname,
@@ -27,5 +30,12 @@ pub async fn create_irc_config(config: Client) -> IrcConfig {
         })
         //.password
         .set_receive_handler(message_receiver)
-        .host(lookup_host(format!("{}:{}", address, port)).await.unwrap().next().unwrap()).unwrap()
+        .host(
+            lookup_host(format!("{}:{}", address, port))
+                .await
+                .unwrap()
+                .next()
+                .unwrap(),
+        )
+        .unwrap()
 }
