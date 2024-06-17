@@ -14,7 +14,7 @@ async fn main() {
     // [ ping_1 = Frontend TX, pong_1 = Backend RX ] -> Frontend to backend comms
     let (ping_2, mut pong_2): (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel(10);
     // [ ping_2 = Backend TX, pong_2 = Frontend RX ] -> Backend to frontend comms
-
+    //
     let (mut stdout, mut canvas): (Stdout, Canvas) = Canvas::init_canvas().unwrap();
 
     canvas.leave_canvas(stdout).unwrap();

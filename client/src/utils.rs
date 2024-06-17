@@ -132,3 +132,7 @@ impl Domain {
         }
     }
 }
+
+pub fn parse_arguments(args: Vec<String>) {
+    todo!()
+}
