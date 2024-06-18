@@ -5,16 +5,13 @@ use crossterm::{
     },
     QueueableCommand,
 };
-use irc::{
-    config::{IrcConfig, IrcConfigBuilder},
-    error::IrcConfigBuilderError,
-};
+use irc::config::IrcConfig;
 use std::{
     borrow::Borrow,
     error::Error,
     fmt::{self, Display},
     io::stdout,
-    net::ToSocketAddrs,
+    net::{IpAddr, SocketAddr, ToSocketAddrs},
 };
 
 use rand::seq::SliceRandom;
@@ -207,6 +204,7 @@ impl Arguments {
                 let server = args.get(2).unwrap();
                 let port = args.get(3).unwrap().parse::<u16>()?;
 
+                /*
                 let mut config = IrcConfigBuilder::new();
 
                 config.server_address(format!("{}:{}", server, port))?;
@@ -215,6 +213,16 @@ impl Arguments {
                 config.password(None);
 
                 let config = config.build()?;
+                */
+
+                let config = IrcConfig {
+                    // TODO: should prob find a better way to do this.
+                    // Error handling is required too. was previously done by builder.
+                    server_address: format!("{}:{}", server, port).to_socket_addrs().unwrap().next().unwrap(),
+                    username: nickname.clone(), // confusing var names lol
+                    nickname: None, // No nickname, username is used
+                    password: None,
+                };
 
                 println!("Config created: {:?}", config);
 
@@ -224,14 +232,14 @@ impl Arguments {
                 let nickname = generate_random_name();
                 let server = "irc.libera.chat:6667".to_owned();
 
-                let mut config = IrcConfigBuilder::new();
-
-                config.server_address(server)?;
-                config.username(nickname.clone());
-                config.nickname(nickname);
-                config.password(None);
-
-                let config = config.build()?;
+                let config = IrcConfig {
+                    // TODO: should prob find a better way to do this.
+                    // Error handling is required too. was previously done by builder.
+                    server_address: server.to_socket_addrs().unwrap().next().unwrap(),
+                    username: nickname.clone(), // confusing var names lol
+                    nickname: None, // No nickname, username is used
+                    password: None,
+                };
 
                 Ok(ParseResult::Config(config))
             }

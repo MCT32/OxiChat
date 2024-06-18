@@ -10,7 +10,7 @@ use crossterm::{
     execute,
     terminal::{Clear, ClearType},
 };
-use irc::config::{IrcConfig, IrcConfigBuilder};
+use irc::config::IrcConfig;
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct OxiChat {
