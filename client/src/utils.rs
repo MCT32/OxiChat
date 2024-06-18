@@ -218,9 +218,12 @@ impl Arguments {
                 let config = IrcConfig {
                     // TODO: should prob find a better way to do this.
                     // Error handling is required too. was previously done by builder.
-                    server_address: format!("{}:{}", server, port).to_socket_addrs().unwrap().next().unwrap(),
+                    server_address: format!("{}:{}", server, port)
+                        .to_socket_addrs()?
+                        .next()
+                        .unwrap(),
                     username: nickname.clone(), // confusing var names lol
-                    nickname: None, // No nickname, username is used
+                    nickname: None,             // No nickname, username is used
                     password: None,
                 };
 
@@ -237,7 +240,7 @@ impl Arguments {
                     // Error handling is required too. was previously done by builder.
                     server_address: server.to_socket_addrs().unwrap().next().unwrap(),
                     username: nickname.clone(), // confusing var names lol
-                    nickname: None, // No nickname, username is used
+                    nickname: None,             // No nickname, username is used
                     password: None,
                 };
 
