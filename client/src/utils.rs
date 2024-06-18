@@ -1,9 +1,34 @@
 use crossterm::{
     execute, queue,
-    terminal::{self, enable_raw_mode, Clear, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{
+        self, disable_raw_mode, enable_raw_mode, Clear, EnterAlternateScreen, LeaveAlternateScreen,
+    },
     QueueableCommand,
 };
-use std::io::stdout;
+use irc::{
+    config::{IrcConfig, IrcConfigBuilder},
+    error::IrcConfigBuilderError,
+};
+use std::{
+    borrow::Borrow,
+    error::Error,
+    fmt::{self, Display},
+    io::stdout,
+    net::ToSocketAddrs,
+};
+
+use rand::seq::SliceRandom;
+use rand::thread_rng;
+
+pub const FIRST_WORDS: [&str; 10] = [
+    // for random name generation lol
+    "Happy", "Funny", "Silly", "Clever", "Brave", "Giggly", "Cheeky", "Witty", "Daring", "Charming",
+];
+
+pub const SECOND_WORDS: [&str; 10] = [
+    "Pirate", "Ninja", "Wizard", "Jedi", "Samurai", "Rockstar", "Guru", "Magician", "Sorcerer",
+    "Master",
+];
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Canvas {
@@ -12,6 +37,8 @@ pub struct Canvas {
     pub chat: Chat,
     pub domain: Domain,
     pub newline_index: u16,
+
+    pub input: String,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -54,6 +81,27 @@ pub enum Color {
     Purple,
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct Arguments {
+    nickname: Option<String>,
+    server: Option<String>,
+    port: Option<u16>,
+}
+
+pub enum ParseResult {
+    Config(IrcConfig),
+    Args(Arguments),
+}
+
+impl fmt::Debug for ParseResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ParseResult::Config(config) => write!(f, "Config({:?})", config),
+            ParseResult::Args(args) => write!(f, "Args({:?})", args),
+        }
+    }
+}
+
 impl Canvas {
     pub fn init_canvas() -> Result<(std::io::Stdout, Self), Box<dyn std::error::Error>> {
         let mut stdout: std::io::Stdout = stdout();
@@ -79,6 +127,7 @@ impl Canvas {
         &mut self,
         mut stdout: std::io::Stdout,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        disable_raw_mode()?;
         execute!(
             stdout,
             Clear(crossterm::terminal::ClearType::All),
@@ -133,6 +182,66 @@ impl Domain {
     }
 }
 
-pub fn parse_arguments(args: Vec<String>) {
-    todo!()
+impl Arguments {
+    pub fn new() -> Self {
+        Self {
+            nickname: None,
+            server: None,
+            port: None,
+        }
+    }
+    pub fn parse_arguments(
+        args: Vec<String>,
+    ) -> Result<ParseResult, crate::error::ArgumentParseError> {
+        match args.len() {
+            2 => {
+                let nickname = args.get(1).unwrap().clone();
+                Ok(ParseResult::Args(Self {
+                    nickname: Some(nickname),
+                    server: None,
+                    port: None,
+                }))
+            }
+            4 => {
+                let nickname = args.get(1).unwrap();
+                let server = args.get(2).unwrap();
+                let port = args.get(3).unwrap().parse::<u16>()?;
+
+                let mut config = IrcConfigBuilder::new();
+
+                config.server_address(format!("{}:{}", server, port))?;
+                config.username(String::from(nickname.clone()));
+                config.nickname(String::from(nickname.clone()));
+                config.password(None);
+
+                let config = config.build()?;
+
+                println!("Config created: {:?}", config);
+
+                Ok(ParseResult::Config(config))
+            }
+            _ => {
+                let nickname = generate_random_name();
+                let server = "irc.libera.chat:6667".to_owned();
+
+                let mut config = IrcConfigBuilder::new();
+
+                config.server_address(server)?;
+                config.username(nickname.clone());
+                config.nickname(nickname);
+                config.password(None);
+
+                let config = config.build()?;
+
+                Ok(ParseResult::Config(config))
+            }
+        }
+    }
+}
+
+pub fn generate_random_name() -> String {
+    let mut rng = thread_rng();
+    let first = FIRST_WORDS.choose(&mut rng).unwrap_or(&"");
+    let second = SECOND_WORDS.choose(&mut rng).unwrap_or(&"");
+    format!("{}{}", first, second)
 }
