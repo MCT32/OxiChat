@@ -8,7 +8,6 @@ pub enum ArgumentParseError {
     InvalidArgumentCount,
     ParseIntError(std::num::ParseIntError),
     IoError(std::io::Error),
-    IrcConfigBuilderError(irc::error::IrcConfigBuilderError),
 }
 
 impl fmt::Display for ArgumentParseError {
@@ -19,9 +18,6 @@ impl fmt::Display for ArgumentParseError {
             }
             ArgumentParseError::ParseIntError(e) => write!(f, "ParseIntError: {}", e),
             ArgumentParseError::IoError(e) => write!(f, "IoError: {}", e),
-            ArgumentParseError::IrcConfigBuilderError(e) => {
-                write!(f, "IrcConfigBuilderError: {:?}", e)
-            }
         }
     }
 }
@@ -37,12 +33,6 @@ impl From<std::num::ParseIntError> for ArgumentParseError {
 impl From<std::io::Error> for ArgumentParseError {
     fn from(err: std::io::Error) -> Self {
         ArgumentParseError::IoError(err)
-    }
-}
-
-impl From<irc::error::IrcConfigBuilderError> for ArgumentParseError {
-    fn from(err: irc::error::IrcConfigBuilderError) -> Self {
-        ArgumentParseError::IrcConfigBuilderError(err)
     }
 }
 
