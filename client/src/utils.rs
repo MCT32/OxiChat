@@ -7,7 +7,7 @@ use crossterm::{
 };
 use irc::config::IrcConfig;
 use std::{
-    borrow::Borrow,
+    borrow::Borrowt,
     error::Error,
     fmt::{self, Display},
     io::stdout,
